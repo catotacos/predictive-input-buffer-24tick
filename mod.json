@@ -5,27 +5,35 @@
 		"android": "2.2081",
 		"mac": "2.2081"
 	},
-	"version": "v2.87.0",
+	"version": "v2.87.1",
 	"id": "basu.input-buffer",
 	"name": "Click Before Frames",
 	"developer": "BASU",
-	"description": "Trajectory-based input buffer: delays early clicks/releases by up to 8+ frames, with orb, pad and portal-aware prediction. github.com/raresdalas1009/-predictive-input-buffer",
+	"description": "Trajectory-based input buffer: delays early clicks/releases by up to 48 frames, with orb, pad and portal-aware prediction. github.com/raresdalas1009/-predictive-input-buffer",
 	"settings": {
-		"custom-ticks": {
+		"stage-slider-x": {
 			"type": "int",
-			"name": "Custom stage: max delay (ticks)",
-			"description": "Max delay for the CUSTOM F6 stage, all modes except wave. 4 ticks = 1 frame at 60fps.",
-			"default": 40,
-			"min": 1,
-			"max": 96
+			"name": "Pause slider: X offset",
+			"description": "Moves the buffer stage slider on the pause screen left (negative) or right (positive), in pixels. The slider is placed relative to the music / SFX sliders; use this if it overlaps something. Applies the next time you pause.",
+			"default": 0,
+			"min": -300,
+			"max": 300
 		},
-		"custom-wave-ticks": {
+		"stage-slider-y": {
 			"type": "int",
-			"name": "Custom stage: max wave delay (ticks)",
-			"description": "Max delay for the CUSTOM F6 stage while in wave.",
-			"default": 20,
-			"min": 0,
-			"max": 96
+			"name": "Pause slider: Y offset",
+			"description": "Moves the buffer stage slider on the pause screen down (negative) or up (positive), in pixels. Applies the next time you pause.",
+			"default": 0,
+			"min": -200,
+			"max": 200
+		},
+		"stage-slider-scale": {
+			"type": "float",
+			"name": "Pause slider: size",
+			"description": "Size of the buffer stage slider on the pause screen. Applies the next time you pause.",
+			"default": 0.6,
+			"min": 0.3,
+			"max": 1.2
 		},
 		"sim-budget-ms": {
 			"type": "float",
@@ -231,7 +239,7 @@
 		"ship-max-delay": {
 			"type": "int",
 			"name": "Ship: max delay (ticks)",
-			"description": "Ship's own max delay, used instead of the F6 stage. Ship has momentum, so small delays are enough and big ones feel laggy. 4 ticks = 1 frame at 60fps.",
+			"description": "Ship's own max delay, used instead of the stage slider. Ship has momentum, so small delays are enough and big ones feel laggy. 4 ticks = 1 frame at 60fps.",
 			"default": 4,
 			"min": 0,
 			"max": 16
@@ -333,7 +341,7 @@
 		"per-level-settings": {
 			"type": "bool",
 			"name": "Per-level settings",
-			"description": "The menu switches are remembered for each level and come back when you open it again. The stage (F6) and low latency are the same for every level.",
+			"description": "The menu switches are remembered for each level and come back when you open it again. The stage (pause-screen slider) and low latency are the same for every level.",
 			"default": false
 		},
 		"death-heatmap": {
@@ -394,13 +402,6 @@
 				"Green",
 				"Dark"
 			]
-		},
-		"bind-stage": {
-			"type": "keybind",
-			"name": "Key: change stage",
-			"description": "Works inside a level. Change it here or in Geode's keybinds popup.",
-			"category": "gameplay",
-			"default": ["Six"]
 		},
 		"bind-menu": {
 			"type": "keybind",

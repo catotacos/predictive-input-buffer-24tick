@@ -1,7 +1,10 @@
 # Click Before Frames (Geode)
 
+## Stage slider
+The buffer stage is a slider on the pause screen, next to the music / SFX sliders. Stops: off, 0.5f, 1f, 2f, 4f, 6f, 8f, 16f, 20f, 24f, 32f, 48f (1 frame = 4 ticks at 240 TPS). Every stop gives the same max delay to every mode, wave included (ship keeps its own max delay setting). The stage is saved and is the same for every level. If the slider overlaps something on your screen, move it with the "Pause slider" offset settings.
+
 ## Keys
-6 cycle stage | 7 menu | F8 copy the console log | F9 open/close the in-game console | F10 path view | F11 forget this level's memory
+7 menu | F8 copy the console log | F9 open/close the in-game console | F10 path view | F11 forget this level's memory
 
 Practice use only; do not use for verified or leaderboard runs.
 
