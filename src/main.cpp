@@ -115,26 +115,39 @@ namespace {
         }
     }
 
+    // v2.87.1: the stage slider on the pause screen walks this list from left to right. Every stage
+    // gives wave the same max delay as every other mode (the separate wave values and the custom
+    // stage are gone). Ship still has its own small max delay (setting). 4 ticks = 1 frame.
     struct Stage {
         bool enabled;
-        int ticksAll;
-        int ticksWave;
-        bool custom;
+        int ticks;  // max delay in 240/s ticks, same for every mode
     };
 
     constexpr Stage STAGES[] = {
-        { true, 2, 2, false },
-        { true, 4, 4, false },
-        { true, 8, 8, false },
-        { true, 16, 8, false },
-        { true, 24, 12, false },
-        { true, 32, 16, false },
-        { true, 80, 80, false },   // 20f / wave 20f
-        { true, 96, 96, false },   // 24f / wave 24f
-        { true, 0, 0, true },
-        { false, 0, 0, false },
+        { false, 0 },    // OFF
+        { true, 2 },     // 0.5f
+        { true, 4 },     // 1f
+        { true, 8 },     // 2f
+        { true, 16 },    // 4f
+        { true, 24 },    // 6f
+        { true, 32 },    // 8f
+        { true, 64 },    // 16f
+        { true, 80 },    // 20f
+        { true, 96 },    // 24f
+        { true, 128 },   // 32f
+        { true, 192 },   // 48f
     };
     constexpr int STAGE_COUNT = sizeof(STAGES) / sizeof(STAGES[0]);
+
+    // index of the enabled stage with this many ticks (falls back to 0.5f)
+    constexpr int stageForTicks(int ticks) {
+        for (int i = 0; i < STAGE_COUNT; ++i) {
+            if (STAGES[i].enabled && STAGES[i].ticks == ticks) {
+                return i;
+            }
+        }
+        return 1;
+    }
 
     struct QueuedInput {
         int ticksLeft;
@@ -176,7 +189,7 @@ namespace {
         bool isPlayer1 = true;
 
         bool enabled = true;
-        int stage = 0;
+        int stage = 1;  // v2.87.1: index 0 is OFF, 1 is 0.5f
         int ticksAll = 2;
         int ticksWave = 2;
 
@@ -533,16 +546,11 @@ namespace {
     }
 
     void applyStage() {
-        auto const& s = STAGES[buf.stage];
+        auto const& s = STAGES[std::clamp(buf.stage, 0, STAGE_COUNT - 1)];
         buf.enabled = s.enabled;
-        if (s.custom) {
-            buf.ticksAll = static_cast<int>(Mod::get()->getSettingValue<int64_t>("custom-ticks"));
-            buf.ticksWave = static_cast<int>(Mod::get()->getSettingValue<int64_t>("custom-wave-ticks"));
-        }
-        else {
-            buf.ticksAll = s.ticksAll;
-            buf.ticksWave = s.ticksWave;
-        }
+        // v2.87.1: one delay for every mode, wave included
+        buf.ticksAll = s.ticks;
+        buf.ticksWave = s.ticks;
     }
 
     // v2.14: a run outside practice where auto-release can press for you is marked on screen.
@@ -624,8 +632,7 @@ namespace {
         if (!buf.enabled) {
             return "Buffer: OFF";
         }
-        return fmt::format("Buffer{}: {:g}f / wave {:g}f{}", STAGES[buf.stage].custom ? " (custom)" : "", buf.ticksAll * TICK,
-            buf.ticksWave * TICK, buf.train ? " [training]" : "");
+        return fmt::format("Buffer: {:g}f{}", buf.ticksAll * TICK, buf.train ? " [training]" : "");
     }
 
     void dropGhosts() {
@@ -3399,10 +3406,59 @@ namespace {
         return true;
     }
 
-    void cycleStage(int dir = 1) {
-        buf.stage = (buf.stage + dir + STAGE_COUNT) % STAGE_COUNT;
+    // v2.87.1: pause-screen stage slider (made in BufPauseLayer). The slider, its label and the
+    // top-right readout are found again by id whenever the stage changes, so nothing is kept
+    // that could outlive the pause screen.
+    std::string stageShortText() {
+        if (!buf.enabled) {
+            return "OFF";
+        }
+        return fmt::format("{:g}f", buf.ticksAll * TICK);
+    }
+
+    std::string pauseReadoutText() {
+        auto text = stageText();
+        if (buf.tps != 240) {
+            text += fmt::format("  |  {} TPS", buf.tps);
+        }
+        return text;
+    }
+
+    float stageSliderValue() {
+        return STAGE_COUNT > 1 ? static_cast<float>(buf.stage) / static_cast<float>(STAGE_COUNT - 1) : 0.f;
+    }
+
+    bool stageSliderBusy = false;  // true while the mod itself moves the slider thumb
+
+    void syncStageSlider() {
+        auto* scene = CCScene::get();
+        if (!scene) {
+            return;
+        }
+        if (auto* node = scene->getChildByIDRecursive("stage-slider"_spr)) {
+            if (auto* slider = typeinfo_cast<Slider*>(node)) {
+                stageSliderBusy = true;
+                slider->setValue(stageSliderValue());
+                stageSliderBusy = false;
+            }
+        }
+        if (auto* node = scene->getChildByIDRecursive("stage-slider-label"_spr)) {
+            if (auto* label = typeinfo_cast<CCLabelBMFont*>(node)) {
+                label->setString(fmt::format("Buffer: {}", stageShortText()).c_str());
+            }
+        }
+        if (auto* node = scene->getChildByIDRecursive("stage-readout"_spr)) {
+            if (auto* label = typeinfo_cast<CCLabelBMFont*>(node)) {
+                label->setString(pauseReadoutText().c_str());
+            }
+        }
+    }
+
+    void setStage(int index) {
+        buf.stage = std::clamp(index, 0, STAGE_COUNT - 1);
         // v2.59: the stage is one setting for every level and survives restarts
-        Mod::get()->setSavedValue("stage", buf.stage);
+        // (v2.87.1: saved as "stage2", an index into the new stage list)
+        Mod::get()->setSavedValue("stage2", buf.stage);
         resetPending();
         // A delayed input that was waiting is dropped; the game gets what you're really
         // holding now (otherwise, with the buffer switched off, it never would).
@@ -3417,6 +3473,25 @@ namespace {
         refreshAutoTag();
         refreshWatermark();
         refreshPanel();
+        syncStageSlider();
+    }
+
+    void cycleStage(int dir = 1) {
+        setStage((buf.stage + dir + STAGE_COUNT) % STAGE_COUNT);
+    }
+
+    // the pause-screen slider moved: snap it onto the nearest stop and switch to that stage
+    void stageFromSlider(float value) {
+        if (stageSliderBusy) {
+            return;
+        }
+        int index = std::clamp(static_cast<int>(std::lround(value * static_cast<float>(STAGE_COUNT - 1))), 0, STAGE_COUNT - 1);
+        if (index != buf.stage) {
+            setStage(index);
+        }
+        else {
+            syncStageSlider();
+        }
     }
 
     // v2.4 wave auto-release (practice mode only): while you hold in wave, check every
@@ -3766,18 +3841,19 @@ private:
     void onPreset(CCObject* sender) {
         auto* mod = Mod::get();
         int which = sender->getTag();
-        int stage = which == 0 ? 2 : which == 1 ? 3 : 5;  // 2f / 4f / 8f
+        int stage = stageForTicks(which == 0 ? 8 : which == 1 ? 16 : 32);  // 2f / 4f / 8f (v2.87.1: wave gets the same delay)
         mod->setSettingValue<bool>("robust-saves", true);
         mod->setSettingValue<bool>("wave-safety-margin", which != 2);
         mod->setSettingValue<bool>("more-time-death-spots", which != 0);
         mod->setSettingValue<bool>("low-latency", false);
         buf.stage = stage;
-        mod->setSavedValue("stage", buf.stage);
+        mod->setSavedValue("stage2", buf.stage);
         resetPending();
         applyStage();
         readSettings();
         refreshWatermark();
         refreshPanel();
+        syncStageSlider();
         say("preset: {} -> {}", which == 0 ? "Safe" : which == 1 ? "Balanced" : "Aggressive", stageText());
         refresh();
     }
@@ -4010,17 +4086,78 @@ class $modify(BufPauseLayer, PauseLayer) {
         this->addChild(menu, 10);
 
         // stage readout on the pause screen
-        auto pauseText = stageText();
-        if (buf.tps != 240) {
-            pauseText += fmt::format("  |  {} TPS", buf.tps);
-        }
+        auto pauseText = pauseReadoutText();
         auto* stageLabel = CCLabelBMFont::create(pauseText.c_str(), "bigFont.fnt");
+        stageLabel->setID("stage-readout"_spr);
         stageLabel->setScale(0.35f);
         stageLabel->setColor({ 150, 205, 255 });
         stageLabel->setOpacity(200);
         stageLabel->setAnchorPoint({ 1.f, 1.f });
         stageLabel->setPosition({ win.width - 6.f, win.height - 4.f });
         this->addChild(stageLabel, 10);
+
+        // v2.87.1: stage slider, next to the music / SFX sliders. It has one stop per stage
+        // (off, 0.5f ... 48f); moving it switches the stage right away and it is saved.
+        std::vector<CCNode*> vanilla;
+        auto sliderById = [this](char const* id) -> CCNode* {
+            auto* node = this->getChildByIDRecursive(id);
+            return node && typeinfo_cast<Slider*>(node) ? node : nullptr;
+        };
+        auto* musicSlider = sliderById("music-slider");
+        auto* sfxSlider = sliderById("sfx-slider");
+        if (musicSlider && sfxSlider) {
+            vanilla = { musicSlider, sfxSlider };
+        }
+        else if (auto* kids = this->getChildren()) {
+            for (auto* child : CCArrayExt<CCNode*>(kids)) {
+                if (typeinfo_cast<Slider*>(child)) {
+                    vanilla.push_back(child);
+                }
+            }
+        }
+        // where the two game sliders really are, in this layer's own space
+        auto localPos = [this](CCNode* node) {
+            auto* parent = node->getParent();
+            auto world = parent ? parent->convertToWorldSpace(node->getPosition()) : node->getPosition();
+            return this->convertToNodeSpace(world);
+        };
+        CCPoint at { win.width * 0.5f, 62.f };  // used when the game sliders can't be found
+        if (vanilla.size() >= 2) {
+            CCPoint a = localPos(vanilla[0]);
+            CCPoint b = localPos(vanilla[1]);
+            float dx = b.x - a.x;
+            float dy = b.y - a.y;
+            if (std::abs(dx) >= std::abs(dy)) {
+                // side by side: a new row right above them, centred between them
+                at = { (a.x + b.x) * 0.5f, std::max(a.y, b.y) + 38.f };
+            }
+            else {
+                // stacked: carry on the column, on whichever side is still on screen
+                CCPoint next { b.x + dx, b.y + dy };
+                CCPoint prev { a.x - dx, a.y - dy };
+                at = (next.y >= 14.f && next.y <= win.height - 14.f) ? next : prev;
+            }
+        }
+        auto* mod = Mod::get();
+        at.x += static_cast<float>(mod->getSettingValue<int64_t>("stage-slider-x"));
+        at.y += static_cast<float>(mod->getSettingValue<int64_t>("stage-slider-y"));
+        float sliderScale = static_cast<float>(mod->getSettingValue<double>("stage-slider-scale"));
+
+        auto* stageSlider = Slider::create(this, menu_selector(BufPauseLayer::onStageSlider), sliderScale);
+        stageSlider->setID("stage-slider"_spr);
+        stageSlider->setPosition(at);
+        stageSlider->setValue(stageSliderValue());
+        this->addChild(stageSlider, 10);
+
+        auto* sliderLabel = CCLabelBMFont::create(fmt::format("Buffer: {}", stageShortText()).c_str(), "bigFont.fnt");
+        sliderLabel->setID("stage-slider-label"_spr);
+        sliderLabel->setScale(0.35f);
+        sliderLabel->setPosition({ at.x, at.y + 14.f });
+        this->addChild(sliderLabel, 10);
+    }
+
+    void onStageSlider(CCObject* sender) {
+        stageFromSlider(static_cast<SliderThumb*>(sender)->getValue());
     }
 
     void onBufferMenu(CCObject*) {
@@ -4032,7 +4169,8 @@ $on_mod(Loaded) {
     buf.console = Mod::get()->getSettingValue<bool>("debug-console");
     buf.showPath = Mod::get()->getSettingValue<bool>("show-path");
     recoverGlobals();
-    buf.stage = std::clamp(static_cast<int>(Mod::get()->getSavedValue<int64_t>("stage", 0)), 0, STAGE_COUNT - 1);
+    // v2.87.1: "stage2" indexes the new stage list (0 = OFF); the old "stage" index meant something else
+    buf.stage = std::clamp(static_cast<int>(Mod::get()->getSavedValue<int64_t>("stage2", stageForTicks(2))), 0, STAGE_COUNT - 1);
     // v2.62: per-level settings off (switched off once): every level uses the same switches, like v2.43.1
     if (!Mod::get()->getSavedValue<bool>("per-level-v262", false)) {
         Mod::get()->setSettingValue<bool>("per-level-settings", false);
@@ -4060,7 +4198,7 @@ $on_mod(Loaded) {
     if (Loader::get()->isModLoaded("square3ang.cbfextrapolate")) {
         say("CBF Extrapolate detected: visual only, predictions unaffected");
     }
-    say("v2.87 loaded. The stage key cycles: 0.5f -> 1f -> 2f -> 4f -> 6f -> 8f -> custom -> off");
+    say("v2.87.1 loaded. Pick the stage with the slider on the pause screen: off, 0.5f, 1f, 2f, 4f, 6f, 8f, 16f, 20f, 24f, 32f, 48f");
 }
 
 class $modify(BufPlayLayer, PlayLayer) {
@@ -4222,7 +4360,7 @@ class $modify(BufPlayLayer, PlayLayer) {
             auto binds = mod->getSettingValue<std::vector<Keybind>>(key);
             return binds.empty() ? std::string("-") : binds.front().toString();
         };
-        auto hintText = fmt::format("{} stage  {} menu  {} copy log  {} console  {} path  {} forget", keyName("bind-stage"),
+        auto hintText = fmt::format("{} menu  {} copy log  {} console  {} path  {} forget",
             keyName("bind-menu"), keyName("bind-export"), keyName("bind-console"), keyName("bind-path"), keyName("bind-forget"));
         auto* hint = CCLabelBMFont::create(hintText.c_str(), "chatFont.fnt");
         hint->setScale(0.45f);
@@ -4649,31 +4787,29 @@ namespace {
         if (!layer) {
             return;
         }
+        // v2.87.1: no stage key any more, the stage is the slider on the pause screen
         switch (action) {
             case 0:
-                cycleStage();
-                break;
-            case 1:
                 if (!layer->m_isPaused) {
                     layer->pauseGame(true);
                 }
                 BufferMenu::open();
                 break;
-            case 2:
+            case 1:
                 exportConsole();
                 break;
-            case 3:
+            case 2:
                 buf.panelOpen = !buf.panelOpen;
                 refreshPanel();
                 break;
-            case 4:
+            case 3:
                 buf.showPath = !buf.showPath;
                 if (buf.pathNode) {
                     buf.pathNode->clear();
                 }
                 say("path view {}", buf.showPath ? "on" : "off");
                 break;
-            case 5:
+            case 4:
                 memory.clear();
                 pending.active = false;
                 memoryDirty = true;
@@ -4684,8 +4820,8 @@ namespace {
     }
 
     void setupKeybinds() {
-        char const* binds[] = { "bind-stage", "bind-menu", "bind-export", "bind-console", "bind-path", "bind-forget" };
-        for (int i = 0; i < 6; ++i) {
+        char const* binds[] = { "bind-menu", "bind-export", "bind-console", "bind-path", "bind-forget" };
+        for (int i = 0; i < 5; ++i) {
             listenForKeybindSettingPresses(binds[i], [i](Keybind const&, bool down, bool repeat, double) {
                 if (down && !repeat) {
                     keyAction(i);
