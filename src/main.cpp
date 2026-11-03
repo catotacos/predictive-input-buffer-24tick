@@ -4129,7 +4129,7 @@ class $modify(BufPauseLayer, PauseLayer) {
             float dy = b.y - a.y;
             if (std::abs(dx) >= std::abs(dy)) {
                 // side by side: a new row right above them, centred between them
-                at = { (a.x + b.x) * 0.5f, std::max(a.y, b.y) + 38.f };
+                at = CCPoint { (a.x + b.x) * 0.5f, std::max(a.y, b.y) + 38.f };
             }
             else {
                 // stacked: carry on the column, on whichever side is still on screen
