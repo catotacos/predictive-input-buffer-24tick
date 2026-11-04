@@ -1,10 +1,10 @@
 # Click Before Frames (Geode)
 
-## Stage slider
-The buffer stage is a slider on the pause screen, next to the music / SFX sliders. Stops: off, 0.5f, 1f, 2f, 4f, 6f, 8f, 16f, 20f, 24f, 32f, 48f (1 frame = 4 ticks at 240 TPS). Every stop gives the same max delay to every mode, wave included (ship keeps its own max delay setting). The stage is saved and is the same for every level. If the slider overlaps something on your screen, move it with the "Pause slider" offset settings.
-
 ## Keys
 7 menu | F8 copy the console log | F9 open/close the in-game console | F10 path view | F11 forget this level's memory
+
+## Stage slider (this fork)
+The buffer stage is a slider on the pause screen, next to the music / SFX sliders. Stops: off, 0.5f, 1f, 2f, 4f, 6f, 8f, 16f, 20f, 24f, 32f, 48f (1 frame = 4 ticks at 240 TPS). Every stop gives the same max delay to every mode, wave included (ship keeps its own max delay setting). The stage is saved and is the same for every level; the stage readout is shown on the pause screen only. If the slider overlaps something on your screen, move it with the "Pause slider" offset settings. Low latency is off by default in this version because it caps every delay at 1 frame.
 
 Practice use only; do not use for verified or leaderboard runs.
 
@@ -79,3 +79,16 @@ Practice use only; do not use for verified or leaderboard runs.
 - v2.86: fixed a crash when leaving a level and opening one again (v2.84/v2.85 could send a button to a level that was still loading); leaving a level now also forgets the button state.
 - v2.87: Android crash when leaving a level fixed: the hidden ghost players were deleted while the level was still being torn down; on Android they're now only let go of.
 - v2.88: dash orbs no longer flash before you reach them: effects a prediction ghost added to the real level (the dash start effect) are removed after each prediction.
+- v2.90: v2.89 reverted (the full "Click Before Frames" watermark is back, no progress bar end cap).
+- v2.92 (merged from the other build): new menu: a draggable window with tabs (Buffer, Prediction, Modes, Custom, Tools) in a space theme (black sky full of twinkling stars, sparkles, shooting stars), Orbitron / Exo 2 fonts, and a heart button on the main menu to open it outside levels too. Custom tab: per-mode frames, a slider for each game mode (your own icons) to pick how many frames cube, ship, ball, UFO, wave, robot, spider and swing can be held back. Prediction: move / rotate / toggle / spawn triggers ahead of you are predicted (with easing, group-parent pivots and spawn delays) and a self-check turns it off on levels where it keeps being wrong; predictions go through teleport, dual and solo portals; plan two clicks ahead (a crash your next click would handle isn't blamed on this one); smarter robot (tries other hold lengths); no-hitch searches (a search out of time goes on next tick instead of giving up). Pads no longer animate before you reach them.
+- v2.93: auto update: the update popup's "Update now" downloads the .geode from the latest GitHub release, checks it's this mod and newer, and installs it (restart to use it).
+- v2.94: the pause menu has a button (purple heart, bottom right) for the menu again, so phones can open it inside a level.
+- v2.95: watermark back (v2.92 had dropped it) and smaller: "CBF | stage" in the bottom left, smaller still on phones, hidden in practice mode.
+- v2.97: v2.96 reverted (no per-frame time budget, TPS setting read every frame again).
+- v2.98: auto update fixed: the update popup now comes from the newest GitHub release (the same file 'Update now' installs), not from the code's version, which could be ahead of the release and made the install fail.
+- v2.99: iOS support. The iOS build needed the FMOD header forced into Geode's generated iOS bindings, arm64-only for iOS, and the menu's title shine no longer uses CCPlace (not available to mods on iOS).
+- v2.99.1: startup checkpoints in the Geode log (to find where some iPhones crash on start); the main menu button is skipped instead of crashing if its image is missing.
+- v2.99.2: iOS: the mod's file is now code-signed (ad-hoc), some iOS launchers refused to load it ("missing code signature").
+- v2.99.3: iOS/macOS: one orb hook was too short to patch safely on Apple chips and corrupted the next game function, so it is skipped there (orbs still wait for the real press); one more startup checkpoint in the log.
+- v2.99.4: iOS: the purple heart button in the pause menu was missing (the game builds the pause menu differently on iOS), it is now also added when the game pauses.
+- v2.99.5: iOS without JIT works: 8 ghost-visual hooks that crashed the no-JIT launcher on the loading screen are left out on iOS (no effect on buffering; other platforms unchanged).
