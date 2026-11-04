@@ -4588,10 +4588,15 @@ namespace {
         return fmt::format("{:g}f", buf.ticksAll * TICK);
     }
 
+    // the physics TPS is the "tps" setting
+    int currentTps() {
+        return static_cast<int>(Mod::get()->getSettingValue<int64_t>("tps"));
+    }
+
     std::string pauseReadoutText() {
         auto text = stageText();
-        if (buf.tps != 240) {
-            text += fmt::format("  |  {} TPS", buf.tps);
+        if (currentTps() != 240) {
+            text += fmt::format("  |  {} TPS", currentTps());
         }
         return text;
     }
@@ -5772,8 +5777,8 @@ class $modify(BufEndLevelLayer, EndLevelLayer) {
         if (buf.usedThisAttempt) {
             auto win = CCDirector::get()->getWinSize();
             auto markText = fmt::format("Click Before Frames was on  |  {}", stageText());
-            if (buf.tps != 240) {
-                markText += fmt::format("  |  {} TPS", buf.tps);
+            if (currentTps() != 240) {
+                markText += fmt::format("  |  {} TPS", currentTps());
             }
             auto* label = CCLabelBMFont::create(markText.c_str(), "bigFont.fnt");
             label->setScale(0.35f);
